@@ -1,0 +1,2209 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>忘年会イントロクイズ - スマホQR早押し対応版</title>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<style>
+  :root {
+    --bg: #0b0f19;
+    --panel: #131a2a;
+    --panel-light: #1c253b;
+    --border: #2a3652;
+    --text: #f8fafc;
+    --muted: #94a3b8;
+    --accent: #f59e0b;
+    --accent-hover: #d97706;
+    --green: #10b981;
+    --red: #ef4444;
+    --blue: #3b82f6;
+    --purple: #8b5cf6;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Hiragino Kaku Gothic ProN', 'Yu Gothic', system-ui, -apple-system, sans-serif; }
+  body { background: var(--bg); color: var(--text); min-height: 100vh; overflow-x: hidden; }
+  button { cursor: pointer; border: none; outline: none; transition: all 0.14s ease; font-weight: 800; }
+  button:active { transform: scale(0.97); }
+  input, select { background: #0d1322; color: var(--text); border: 1px solid var(--border); border-radius: 10px; padding: 9px 12px; font-size: 14px; }
+  input:focus, select:focus { border-color: var(--accent); outline: none; }
+
+  /* ================= HOST HEADER ================= */
+  .header {
+    display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;
+    padding: 12px 20px; background: var(--panel); border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 40;
+  }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .brand-icon {
+    width: 42px; height: 42px; border-radius: 12px;
+    background: linear-gradient(135deg, #f59e0b, #ef4444);
+    display: flex; align-items: center; justify-content: center; font-size: 22px;
+    box-shadow: 0 4px 14px rgba(245, 158, 11, 0.35);
+  }
+  .brand h1 { font-size: 18px; font-weight: 900; letter-spacing: 0.5px; }
+  .room-status-row { display: flex; align-items: center; gap: 8px; margin-top: 3px; flex-wrap: wrap; }
+  .room-id-pill { font-size: 12px; color: var(--accent); font-weight: 800; }
+  .conn-dot-badge {
+    display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700;
+    color: #34d399; background: rgba(16, 185, 129, 0.14); padding: 2px 9px; border-radius: 99px;
+  }
+  .conn-dot-badge.warn { color: #fbbf24; background: rgba(245, 158, 11, 0.16); }
+
+  .header-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .btn-nav {
+    padding: 9px 14px; border-radius: 10px; font-size: 13px;
+    background: var(--panel-light); color: var(--text); border: 1px solid var(--border);
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .btn-nav:hover { background: #263350; }
+  .btn-qr {
+    background: linear-gradient(135deg, #6366f1, #8b5cf6); color: #fff; border: none;
+    box-shadow: 0 4px 14px rgba(99, 102, 241, 0.4);
+  }
+  .btn-qr:hover { filter: brightness(1.1); }
+  .btn-nav.active { background: var(--accent); color: #000; border-color: var(--accent); }
+  .badge-count { background: rgba(0,0,0,0.35); color: #fff; padding: 2px 8px; border-radius: 99px; font-size: 11px; }
+
+  /* ================= HOST LAYOUT ================= */
+  .main-grid {
+    display: grid; grid-template-columns: 1.4fr 1fr; gap: 16px;
+    padding: 16px 20px; max-width: 1480px; margin: 0 auto;
+  }
+  @media (max-width: 960px) { .main-grid { grid-template-columns: 1fr; padding: 12px; } }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 18px; padding: 18px; }
+
+  /* Track Navigation */
+  .track-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .track-pill {
+    background: rgba(245, 158, 11, 0.14); color: var(--accent); border: 1px solid rgba(245, 158, 11, 0.4);
+    padding: 6px 20px; border-radius: 99px; font-weight: 900; font-size: 15px;
+  }
+
+  /* Stage Vinyl & Reveal */
+  .stage-box {
+    background: #0d1322; border: 1px solid var(--border); border-radius: 16px;
+    padding: 22px; display: flex; align-items: center; gap: 24px; min-height: 215px;
+    position: relative; overflow: hidden;
+  }
+  @media (max-width: 600px) { .stage-box { flex-direction: column; text-align: center; } }
+  .vinyl-wrap {
+    position: relative; width: 150px; height: 150px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .vinyl {
+    width: 146px; height: 146px; border-radius: 50%;
+    background: radial-gradient(circle, #1e293b 0%, #0f172a 32%, #1e293b 34%, #090d16 65%, #1e293b 67%, #090d16 100%);
+    border: 3px solid #334155; display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 10px 28px rgba(0,0,0,0.65);
+  }
+  .vinyl.spinning { animation: spin 2.8s linear infinite; }
+  @keyframes spin { 100% { transform: rotate(360deg); } }
+  .vinyl-label {
+    width: 54px; height: 54px; border-radius: 50%;
+    background: linear-gradient(135deg, #f59e0b, #ef4444);
+    display: flex; align-items: center; justify-content: center; overflow: hidden;
+    border: 2px solid #fff;
+  }
+  .vinyl-label img { width: 100%; height: 100%; object-fit: cover; }
+  .vinyl-hole { width: 12px; height: 12px; border-radius: 50%; background: #0d1322; position: absolute; }
+
+  .cover-reveal {
+    position: absolute; inset: 0; border-radius: 14px; overflow: hidden;
+    border: 2px solid var(--accent); box-shadow: 0 8px 24px rgba(0,0,0,0.75);
+    display: none; background: #1e293b;
+  }
+  .cover-reveal img { width: 100%; height: 100%; object-fit: cover; }
+
+  .song-meta { flex: 1; min-width: 0; }
+  .status-chip {
+    display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 8px;
+    font-size: 12px; font-weight: 800; background: #1e293b; color: #cbd5e1; margin-bottom: 10px;
+  }
+  .status-chip.playing { background: rgba(16, 185, 129, 0.22); color: #34d399; }
+  .status-chip.buzzed { background: rgba(239, 68, 68, 0.28); color: #fca5a5; animation: pulseChip 0.8s infinite alternate; }
+  .status-chip.revealed { background: rgba(245, 158, 11, 0.25); color: #fcd34d; }
+  @keyframes pulseChip { from { opacity: 0.75; } to { opacity: 1; } }
+
+  .song-title { font-size: 28px; font-weight: 900; line-height: 1.25; margin-bottom: 6px; word-break: break-word; }
+  .song-artist { font-size: 17px; color: var(--accent); font-weight: 800; margin-bottom: 10px; }
+  .song-sub { font-size: 12px; color: var(--muted); }
+
+  /* Progress & Audio */
+  .progress-wrap { margin: 16px 0; }
+  .progress-bar-row { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .seek-slider { flex: 1; accent-color: var(--accent); height: 6px; cursor: pointer; }
+  .sub-controls { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; font-size: 12px; color: var(--muted); flex-wrap: wrap; gap: 8px; }
+  .kbd { background: #1e293b; border: 1px solid #334155; border-radius: 5px; padding: 1px 6px; font-size: 11px; color: #e2e8f0; }
+
+  /* Play Action Buttons */
+  .play-actions { display: grid; grid-template-columns: 1.25fr 1fr 1fr; gap: 10px; margin-top: 14px; }
+  @media (max-width: 640px) { .play-actions { grid-template-columns: 1fr; } }
+  .btn-big {
+    padding: 15px 14px; border-radius: 12px; font-size: 15px; font-weight: 900;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+  }
+  .btn-play { background: var(--accent); color: #000; }
+  .btn-play:hover { background: var(--accent-hover); }
+  .btn-chorus { background: #4f46e5; color: #fff; }
+  .btn-chorus:hover { background: #4338ca; }
+  .btn-reveal { background: #e11d48; color: #fff; }
+  .btn-reveal:hover { background: #be123c; }
+
+  /* Judge Panel & Resume Banner */
+  .judge-box {
+    margin-top: 14px; border-radius: 16px; padding: 18px; border: 2px solid var(--accent);
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.18), rgba(239, 68, 68, 0.16));
+    display: none;
+  }
+  .judge-top { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
+  .buzzed-team-name { font-size: 26px; font-weight: 900; }
+  .buzz-badges { display: flex; align-items: center; gap: 8px; }
+  .buzz-time-badge { background: #000; color: #fde047; padding: 5px 12px; border-radius: 8px; font-size: 14px; font-weight: 900; }
+  .answer-timer-badge { background: #ef4444; color: #fff; padding: 5px 12px; border-radius: 8px; font-size: 14px; font-weight: 900; }
+  .runner-up-list { font-size: 12px; color: #cbd5e1; margin-bottom: 12px; line-height: 1.5; }
+  .judge-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  @media (max-width: 600px) { .judge-btns { grid-template-columns: 1fr; } }
+  .btn-correct { background: var(--green); color: #000; padding: 15px; border-radius: 12px; font-size: 16px; font-weight: 900; }
+  .btn-wrong { background: var(--red); color: #fff; padding: 15px; border-radius: 12px; font-size: 16px; font-weight: 900; }
+  .btn-cancel-buzz {
+    background: #334155; color: #f8fafc; border: 1px solid #475569;
+    padding: 11px 14px; border-radius: 12px; font-size: 13px; font-weight: 800;
+    margin-top: 10px; width: 100%;
+  }
+  .btn-cancel-buzz:hover { background: #475569; }
+
+  .resume-banner {
+    margin-top: 14px; border-radius: 16px; padding: 18px; border: 2px dashed var(--accent);
+    background: rgba(245, 158, 11, 0.12); text-align: center; display: none;
+  }
+  .btn-resume {
+    background: var(--accent); color: #000; padding: 14px 28px; border-radius: 12px;
+    font-size: 16px; font-weight: 900; margin-top: 10px; box-shadow: 0 6px 20px rgba(245, 158, 11, 0.35);
+  }
+
+  /* One-Screen Split Buzzer Grid */
+  .split-buzzer-panel {
+    margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); display: none;
+  }
+  .split-buzzer-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-top: 10px; }
+  .btn-split-team {
+    padding: 18px 10px; border-radius: 14px; color: #fff; font-size: 15px; font-weight: 900;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.5); box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  }
+  .btn-split-team:disabled { opacity: 0.35; cursor: not-allowed; filter: grayscale(0.8); }
+
+  /* Right Scoreboard */
+  .score-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .score-header h2 { font-size: 17px; font-weight: 900; display: flex; align-items: center; gap: 8px; }
+  .team-list { display: flex; flex-direction: column; gap: 10px; }
+  .team-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    background: #0d1322; border: 1px solid var(--border); border-radius: 14px; padding: 12px 14px;
+    transition: all 0.2s;
+  }
+  .team-row.locked { opacity: 0.5; border-color: #ef4444; background: rgba(239, 68, 68, 0.08); }
+  .team-row.buzzed { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.35); }
+  .team-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .rank-badge {
+    width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center;
+    font-weight: 900; font-size: 14px; color: #fff; flex-shrink: 0;
+  }
+  .team-info-name { font-size: 15px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .team-info-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .team-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  .btn-pt {
+    background: var(--panel-light); color: var(--text); border: 1px solid var(--border);
+    padding: 6px 10px; border-radius: 8px; font-size: 12px;
+  }
+  .btn-pt.plus { color: #34d399; }
+  .score-val { font-size: 20px; font-weight: 900; color: var(--accent); min-width: 54px; text-align: right; font-variant-numeric: tabular-nums; }
+
+  /* ================= SETTINGS VIEW ================= */
+  .settings-wrap { max-width: 1200px; margin: 0 auto; padding: 16px 20px; display: none; }
+  .settings-grid { display: grid; grid-template-columns: 1fr 1.4fr; gap: 16px; }
+  @media (max-width: 900px) { .settings-grid { grid-template-columns: 1fr; } }
+  .setting-row {
+    display: flex; align-items: center; gap: 8px; background: #0d1322;
+    border: 1px solid var(--border); border-radius: 12px; padding: 10px; margin-bottom: 8px; flex-wrap: wrap;
+  }
+  .points-rule-box {
+    background: #0d1322; border: 1px solid var(--border); border-radius: 12px;
+    padding: 12px; margin-bottom: 14px; display: flex; flex-direction: column; gap: 10px;
+  }
+  .points-rule-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+  .track-edit-card {
+    background: #0d1322; border: 1px solid var(--border); border-radius: 14px; padding: 14px; margin-bottom: 12px;
+  }
+  .track-edit-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; gap: 8px; flex-wrap: wrap; }
+  .track-edit-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+  .track-time-fields { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 10px; background: rgba(255,255,255,0.03); padding: 8px 10px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.06); }
+  @media (max-width: 600px) { .track-edit-fields { grid-template-columns: 1fr; } }
+  .file-upload-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+
+  /* ================= QR MODAL ================= */
+  .modal-backdrop {
+    position: fixed; inset: 0; background: rgba(0, 0, 0, 0.78); backdrop-filter: blur(4px);
+    display: none; align-items: center; justify-content: center; z-index: 100; padding: 16px;
+  }
+  .modal-card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 20px;
+    max-width: 500px; width: 100%; padding: 24px; text-align: center;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.75); max-height: 92vh; overflow-y: auto;
+  }
+  .qr-box {
+    background: #ffffff; padding: 16px; border-radius: 16px; display: inline-flex;
+    align-items: center; justify-content: center; margin: 14px auto;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  }
+  .qr-box svg { display: block; width: 230px; height: 230px; }
+  .url-override-box {
+    background: #0d1322; border: 1px solid var(--border); border-radius: 12px;
+    padding: 12px; margin-top: 12px; text-align: left;
+  }
+  .url-override-box label { display: block; font-size: 11px; color: var(--muted); margin-bottom: 5px; font-weight: 700; }
+  .url-input-row { display: flex; gap: 6px; }
+  .url-input-row input { flex: 1; font-size: 12px; padding: 7px 10px; }
+
+  /* ================= SMARTPHONE PLAYER VIEW ================= */
+  .mobile-app {
+    display: none; min-height: 100vh; flex-direction: column;
+    background: #090d16; color: #fff; padding: 16px; max-width: 520px; margin: 0 auto;
+  }
+  .mobile-header {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding-bottom: 12px; border-bottom: 1px solid var(--border); margin-bottom: 16px;
+  }
+  .mobile-room-tag { font-size: 12px; background: #1e293b; padding: 4px 10px; border-radius: 99px; color: var(--accent); font-weight: 800; }
+  .btn-mobile-reconnect {
+    font-size: 11px; background: #1e293b; color: #e2e8f0; border: 1px solid #334155;
+    padding: 5px 10px; border-radius: 8px; font-weight: 800;
+  }
+  .team-select-grid { display: grid; grid-template-columns: 1fr; gap: 12px; margin-top: 12px; }
+  .btn-select-team {
+    padding: 18px 20px; border-radius: 16px; color: #fff; font-size: 18px; font-weight: 900;
+    display: flex; align-items: center; justify-content: space-between;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.35); text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+  }
+  .buzzer-stage {
+    flex: 1; display: flex; flex-direction: column; justify-content: space-between; gap: 14px;
+  }
+  .massive-buzzer {
+    flex: 1; min-height: 310px; border-radius: 28px; color: #fff;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+    font-size: 32px; font-weight: 900; letter-spacing: 1px;
+    box-shadow: 0 14px 0 rgba(0,0,0,0.45), 0 20px 40px rgba(0,0,0,0.6);
+    text-shadow: 0 2px 6px rgba(0,0,0,0.5); user-select: none; -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+  .massive-buzzer:active:not(:disabled) {
+    transform: translateY(8px); box-shadow: 0 6px 0 rgba(0,0,0,0.45);
+  }
+  .massive-buzzer:disabled {
+    opacity: 0.42; filter: grayscale(0.82); cursor: not-allowed; box-shadow: none;
+  }
+  .buzzer-subtext { font-size: 15px; font-weight: 700; opacity: 0.92; padding: 0 14px; text-align: center; }
+  .btn-mobile-withdraw {
+    background: linear-gradient(135deg, #334155, #1e293b); color: #fde047;
+    border: 2px solid #f59e0b; padding: 15px; border-radius: 16px;
+    font-size: 15px; font-weight: 900; text-align: center;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.45);
+  }
+
+  /* Toast & Confetti */
+  .toast {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    background: #1e293b; color: #fff; border: 1px solid var(--accent);
+    padding: 10px 20px; border-radius: 99px; font-size: 13px; font-weight: 800;
+    z-index: 200; opacity: 0; pointer-events: none; transition: opacity 0.25s;
+  }
+  .toast.show { opacity: 1; }
+  #confettiCanvas { position: fixed; inset: 0; pointer-events: none; z-index: 150; }
+</style>
+</head>
+<body>
+
+<canvas id="confettiCanvas"></canvas>
+<div id="toast" class="toast"></div>
+
+<!-- ===================================================================== -->
+<!-- 1. HOST PC / PROJECTOR VIEW                                           -->
+<!-- ===================================================================== -->
+<div id="hostApp">
+  <header class="header">
+    <div class="brand">
+      <div class="brand-icon">🎵</div>
+      <div>
+        <h1>忘年会イントロクイズ</h1>
+        <div class="room-status-row">
+          <span class="room-id-pill">ROOM: <span id="hostRoomIdDisplay">----</span></span>
+          <span id="hostConnBadge" class="conn-dot-badge warn">● 接続準備中...</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="header-actions">
+      <button class="btn-nav btn-qr" onclick="openQrModal()">
+        📱 スマホQR接続 <span class="badge-count" id="totalDevicesBadge">0台</span>
+      </button>
+      <button class="btn-nav" id="btnSplitToggle" onclick="toggleSplitBuzzer()">
+        🎛 1画面スイッチ: OFF
+      </button>
+      <button class="btn-nav active" id="tabQuizBtn" onclick="switchHostTab('quiz')">
+        🎤 クイズ本番
+      </button>
+      <button class="btn-nav" id="tabSettingsBtn" onclick="switchHostTab('settings')">
+        ⚙ 曲・チーム設定
+      </button>
+    </div>
+  </header>
+
+  <!-- MAIN QUIZ VIEW -->
+  <div id="quizView" class="main-grid">
+    <!-- Left Column: Stage & Controls -->
+    <div class="card">
+      <div class="track-nav">
+        <button class="btn-nav" onclick="changeTrack(-1)">◀ 前の曲</button>
+        <div class="track-pill" id="trackCounterPill">第1問 / 全5問</div>
+        <button class="btn-nav" onclick="changeTrack(1)">次の曲 ▶</button>
+      </div>
+
+      <div class="stage-box">
+        <div class="vinyl-wrap">
+          <div class="vinyl" id="vinylDisc">
+            <div class="vinyl-label" id="vinylLabel">🎶</div>
+            <div class="vinyl-hole"></div>
+          </div>
+          <div class="cover-reveal" id="coverRevealBox">
+            <img id="coverRevealImg" src="" alt="ジャケット">
+          </div>
+        </div>
+
+        <div class="song-meta">
+          <div class="status-chip" id="stageStatusChip">🎧 イントロ出題待機中（スマホロック中）</div>
+          <div class="song-title" id="stageSongTitle">？？？？？？</div>
+          <div class="song-artist" id="stageSongArtist">アーティスト：？？？</div>
+        </div>
+      </div>
+
+      <!-- Progress & Audio Controls -->
+      <div class="progress-wrap">
+        <div class="progress-bar-row">
+          <span id="timeCurrent">0:00</span>
+          <input type="range" id="seekSlider" class="seek-slider" min="0" max="100" value="0" oninput="onSeekInput(this.value)">
+          <span id="timeDuration">0:24</span>
+        </div>
+        <div class="sub-controls">
+          <div>ショートカット: <span class="kbd">Space</span> 再生/停止 ・ <span class="kbd">1</span>〜<span class="kbd">8</span> 早押し</div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span>🔊</span>
+            <input type="range" id="volumeSlider" min="0" max="1" step="0.05" value="0.85" style="width:90px;accent-color:var(--accent);" oninput="onVolumeChange(this.value)">
+          </div>
+        </div>
+      </div>
+
+      <!-- Primary MC Buttons -->
+      <div class="play-actions">
+        <button class="btn-big btn-play" id="btnMainPlay" onclick="togglePlayPause()">
+          ▶ イントロ再生
+        </button>
+        <button class="btn-big btn-chorus" onclick="playFromChorus()">
+          🎵 サビ頭出し再生
+        </button>
+        <button class="btn-big btn-reveal" onclick="revealAnswer(true)">
+          💡 正解オープン
+        </button>
+      </div>
+
+      <!-- Buzz Judging Panel -->
+      <div class="judge-box" id="judgeBox">
+        <div class="judge-top">
+          <div>
+            <div style="font-size:12px;color:#fde047;font-weight:800;">🚨 早押し解答権獲得！</div>
+            <div class="buzzed-team-name" id="buzzedTeamTitle">Aチーム（紅組）</div>
+          </div>
+          <div class="buzz-badges">
+            <span class="buzz-time-badge" id="buzzReactionBadge">⏱ 0.00秒</span>
+            <span class="answer-timer-badge" id="answerCountdownBadge">残り 10秒</span>
+          </div>
+        </div>
+        <div class="runner-up-list" id="runnerUpList"></div>
+        <div class="judge-btns">
+          <button class="btn-correct" onclick="judgeAnswer(true)">
+            ⭕ 正解！（+<span id="judgePointsLabel">10</span>pt ＆ サビ再生）
+          </button>
+          <button class="btn-wrong" id="btnJudgeWrong" onclick="judgeAnswer(false)">
+            ❌ 不正解（お手つきロック）
+          </button>
+        </div>
+        <button class="btn-cancel-buzz" onclick="cancelBuzz()">
+          ↩ 誤タップ取り下げ（ロック・減点なしで音楽再開）
+        </button>
+      </div>
+
+      <!-- Wrong Answer Resume Banner (Does NOT auto-play!) -->
+      <div class="resume-banner" id="resumeBanner">
+        <div style="font-size:15px;font-weight:900;color:#fca5a5;" id="resumeBannerText">
+          ❌ 不正解！お手つきロックしました（音楽は一時停止中です）
+        </div>
+        <div style="font-size:12px;color:#cbd5e1;margin-top:4px;">
+          他のチームもまだ早押し可能です。司会者のタイミングで再開してください。
+        </div>
+        <button class="btn-resume" onclick="resumeAfterWrong()">
+          ▶ クリックして曲の続きをリスタート！（Spaceキー）
+        </button>
+      </div>
+
+      <!-- Optional 1-Screen Split Buzzer -->
+      <div class="split-buzzer-panel" id="splitBuzzerPanel">
+        <div style="font-size:12px;color:var(--muted);font-weight:800;">🎛 1画面早押しスイッチ（音楽再生中のみ押せます）</div>
+        <div class="split-buzzer-grid" id="splitBuzzerGrid"></div>
+      </div>
+    </div>
+
+    <!-- Right Column: Team Scoreboard -->
+    <div class="card">
+      <div class="score-header">
+        <h2>🏆 チームスコアボード</h2>
+        <button class="btn-nav" onclick="unlockAllTeams()">🔓 ロック全解除</button>
+      </div>
+      <div class="team-list" id="scoreboardList"></div>
+    </div>
+  </div>
+
+  <!-- SETTINGS VIEW -->
+  <div id="settingsView" class="settings-wrap">
+    <div class="settings-grid">
+      <!-- Team Configuration -->
+      <div class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+          <h2 style="font-size:17px;font-weight:900;">👥 チーム設定（2〜8チーム）</h2>
+          <button class="btn-nav" onclick="addTeam()">＋ チーム追加</button>
+        </div>
+        <div class="points-rule-box">
+          <div class="points-rule-row">
+            <label style="font-size:13px;font-weight:800;color:#34d399;">⭕ 1問あたりの正解ポイント：</label>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <input type="number" id="pointsPerQuestionInput" value="10" min="1" max="100" style="width:84px;" onchange="updatePointsSetting(this.value)">
+              <span style="font-size:13px;color:var(--muted);">pt</span>
+            </div>
+          </div>
+          <div class="points-rule-row">
+            <label style="font-size:13px;font-weight:800;color:#fca5a5;">❌ お手付き（不正解）マイナス：</label>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <span style="font-size:14px;font-weight:900;color:#ef4444;">-</span>
+              <input type="number" id="penaltyPerWrongInput" value="0" min="0" max="100" style="width:84px;" onchange="updatePenaltySetting(this.value)">
+              <span style="font-size:13px;color:var(--muted);">pt（0で減点なし）</span>
+            </div>
+          </div>
+        </div>
+        <div id="teamSettingsList"></div>
+      </div>
+
+      <!-- Tracklist Configuration -->
+      <div class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+          <h2 style="font-size:17px;font-weight:900;">🎼 出題リスト設定</h2>
+          <div style="display:flex;gap:8px;">
+            <label class="btn-nav" style="cursor:pointer;">
+              📁 曲ファイル一括追加
+              <input type="file" accept="audio/*" multiple style="display:none;" onchange="bulkUploadTracks(this.files)">
+            </label>
+            <button class="btn-nav" onclick="addBlankTrack()">＋ 曲を追加</button>
+          </div>
+        </div>
+        <div id="trackSettingsList"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================================================================== -->
+<!-- QR CONNECTION MODAL                                                   -->
+<!-- ===================================================================== -->
+<div class="modal-backdrop" id="qrModal" onclick="if(event.target===this) closeQrModal()">
+  <div class="modal-card">
+    <div style="display:flex;align-items:center;justify-content:space-between;">
+      <h2 style="font-size:18px;font-weight:900;">📱 スマホ早押しボタン接続</h2>
+      <button class="btn-nav" onclick="closeQrModal()">✕ 閉じる</button>
+    </div>
+    <p style="font-size:13px;color:var(--muted);margin-top:8px;">
+      参加者のスマホ標準カメラで下のQRコードを読み取ると、専用の早押しスイッチ画面が開きます。
+    </p>
+
+    <div class="qr-box" id="qrSvgContainer"></div>
+
+    <div style="display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+      <span style="font-size:14px;font-weight:900;color:var(--accent);">ROOM ID: <span id="modalRoomId">----</span></span>
+      <button class="btn-nav" onclick="regenerateRoomId()">🔄 ID再発行</button>
+      <button class="btn-nav" onclick="copyShareUrl()">📋 URLコピー</button>
+    </div>
+
+    <div style="margin-bottom:10px;">
+      <a id="testPhoneLink" href="#" target="_blank" style="color:#818cf8;font-size:13px;font-weight:800;text-decoration:underline;">
+        🔗 別タブでスマホ参加画面をテスト開く ↗
+      </a>
+    </div>
+
+    <div class="url-override-box">
+      <label>🌐 公開URL（自動検出済み・手動変更も可）</label>
+      <div class="url-input-row">
+        <input type="text" id="baseUrlInput" placeholder="https://your-site.netlify.app/" onchange="refreshQrCode()">
+        <button class="btn-nav" onclick="refreshQrCode()">QR更新</button>
+      </div>
+      <div id="localFileWarning" style="display:none;color:#fbbf24;font-size:11px;margin-top:6px;">
+        ※現在ローカルファイル等から開かれています。スマホから接続するには、Netlify等に公開した「https://〜」のURLを上の欄に入力してください。
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================================================================== -->
+<!-- 2. SMARTPHONE PLAYER VIEW (?room=XXXX)                                -->
+<!-- ===================================================================== -->
+<div id="mobileApp" class="mobile-app">
+  <div class="mobile-header">
+    <div>
+      <div style="font-size:16px;font-weight:900;">🎵 忘年会イントロ早押し</div>
+      <div id="mobileConnStatus" style="font-size:12px;color:#fbbf24;margin-top:2px;">● PCホストへ接続中...</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:6px;">
+      <div class="mobile-room-tag">ROOM: <span id="mobileRoomDisplay">----</span></div>
+      <button class="btn-mobile-reconnect" onclick="manualMobileReconnect()">🔄 再接続</button>
+    </div>
+  </div>
+
+  <!-- Manual Room ID Fallback (if opened without ?room=) -->
+  <div id="mobileManualConnect" style="display:none;background:var(--panel);padding:18px;border-radius:16px;border:1px solid var(--border);margin-bottom:16px;">
+    <div style="font-size:14px;font-weight:800;margin-bottom:8px;">PC画面に表示されている4桁のROOM IDを入力</div>
+    <div style="display:flex;gap:8px;">
+      <input type="tel" id="manualRoomInput" maxlength="4" placeholder="例: 3717" style="flex:1;font-size:20px;font-weight:900;text-align:center;letter-spacing:4px;">
+      <button class="btn-big btn-play" style="padding:10px 20px;" onclick="connectManualRoom()">接続</button>
+    </div>
+  </div>
+
+  <!-- Step 1: Team Selection -->
+  <div id="mobileTeamSelectStep">
+    <div style="font-size:15px;font-weight:800;color:#e2e8f0;margin-bottom:6px;">参加するチームをタップしてください：</div>
+    <div class="team-select-grid" id="mobileTeamGrid"></div>
+  </div>
+
+  <!-- Step 2: Massive Buzzer Screen -->
+  <div id="mobileBuzzerStep" class="buzzer-stage" style="display:none;">
+    <div style="display:flex;align-items:center;justify-content:space-between;background:var(--panel);padding:12px 16px;border-radius:14px;border:1px solid var(--border);">
+      <div>
+        <div style="font-size:11px;color:var(--muted);">あなたのチーム</div>
+        <div id="mobileMyTeamName" style="font-size:18px;font-weight:900;">Aチーム</div>
+      </div>
+      <div style="text-align:right;">
+        <div style="font-size:11px;color:var(--muted);">現在のスコア</div>
+        <div id="mobileMyTeamScore" style="font-size:22px;font-weight:900;color:var(--accent);">0 pt</div>
+      </div>
+    </div>
+
+    <button id="massiveBuzzerBtn" class="massive-buzzer" disabled ontouchstart="handleMobileBuzz(event)" onclick="handleMobileBuzz(event)">
+      <span id="buzzerMainText">🔒 待機中</span>
+      <span id="buzzerSubText" class="buzzer-subtext">音楽が流れたら押せます！</span>
+    </button>
+
+    <!-- Withdraw / Cancel Buzz Button (Visible only when this team holds the buzz) -->
+    <button id="mobileWithdrawBtn" class="btn-mobile-withdraw" style="display:none;" onclick="handleMobileCancelBuzz()">
+      ↩ 間違えたので回答を取り下げる（減点なし）
+    </button>
+
+    <button class="btn-nav" style="justify-content:center;padding:12px;" onclick="leaveMobileTeam()">
+      ↩ チームを変更する
+    </button>
+  </div>
+</div>
+
+<script>
+/* ============================================================================
+   1. ISO/IEC 18004 COMPLIANT QR CODE GENERATOR (Version 1-10, Byte Mode, ECC-L)
+   Zero external dependencies, exact GF(256) Reed-Solomon, Mask 0 (0x77c4).
+   ============================================================================ */
+const IsoQrGenerator = (() => {
+  const EXP = new Uint8Array(512);
+  const LOG = new Uint8Array(256);
+  (() => {
+    let x = 1;
+    for (let i = 0; i < 255; i++) {
+      EXP[i] = x;
+      LOG[x] = i;
+      x <<= 1;
+      if (x & 0x100) x ^= 0x11d;
+    }
+    for (let i = 255; i < 512; i++) EXP[i] = EXP[i - 255];
+  })();
+
+  function gfMul(a, b) {
+    if (a === 0 || b === 0) return 0;
+    return EXP[LOG[a] + LOG[b]];
+  }
+
+  function rsGeneratorPoly(ecLen) {
+    let poly = [1];
+    for (let i = 0; i < ecLen; i++) {
+      const next = new Array(poly.length + 1).fill(0);
+      const factor = EXP[i];
+      for (let j = 0; j < poly.length; j++) {
+        next[j] ^= poly[j];
+        next[j + 1] ^= gfMul(poly[j], factor);
+      }
+      poly = next;
+    }
+    return poly;
+  }
+
+  function rsEncode(dataBytes, ecLen) {
+    const gen = rsGeneratorPoly(ecLen);
+    const res = new Uint8Array(dataBytes.length + ecLen);
+    res.set(dataBytes);
+    for (let i = 0; i < dataBytes.length; i++) {
+      const coef = res[i];
+      if (coef !== 0) {
+        for (let j = 0; j < gen.length; j++) {
+          res[i + j] ^= gfMul(gen[j], coef);
+        }
+      }
+    }
+    return res.slice(dataBytes.length);
+  }
+
+  const VERSION_SPECS = [
+    null,
+    [1,  26,  7, 1, 19, 0, 0, []],
+    [2,  44, 10, 1, 34, 0, 0, [6, 18]],
+    [3,  70, 15, 1, 55, 0, 0, [6, 22]],
+    [4, 100, 20, 1, 80, 0, 0, [6, 26]],
+    [5, 134, 26, 1, 108, 0, 0, [6, 30]],
+    [6, 172, 18, 2, 68, 0, 0, [6, 34]],
+    [7, 196, 20, 2, 78, 0, 0, [6, 22, 38]],
+    [8, 242, 24, 2, 97, 0, 0, [6, 24, 42]],
+    [9, 292, 30, 2, 116, 0, 0, [6, 26, 46]],
+    [10, 346, 18, 2, 68, 2, 69, [6, 28, 50]]
+  ];
+
+  const VERSION_INFO_BITS = {
+    7: 0x07c94,
+    8: 0x085bc,
+    9: 0x09a99,
+    10: 0x0a4d3
+  };
+
+  function encodeData(text) {
+    const utf8 = new TextEncoder().encode(text);
+    let spec = null;
+    for (let v = 1; v <= 10; v++) {
+      const s = VERSION_SPECS[v];
+      const totalDataCap = s[3] * s[4] + s[5] * s[6];
+      const headerBits = v <= 9 ? 12 : 20;
+      if (headerBits + utf8.length * 8 <= totalDataCap * 8) {
+        spec = s;
+        break;
+      }
+    }
+    if (!spec) throw new Error("URL too long for QR V1-V10");
+
+    const version = spec[0];
+    const totalDataCodewords = spec[3] * spec[4] + spec[5] * spec[6];
+    const bits = [];
+    const pushBits = (val, len) => {
+      for (let i = len - 1; i >= 0; i--) bits.push((val >>> i) & 1);
+    };
+
+    pushBits(0b0100, 4);
+    pushBits(utf8.length, version <= 9 ? 8 : 16);
+    for (const b of utf8) pushBits(b, 8);
+
+    const capBits = totalDataCodewords * 8;
+    const termLen = Math.min(4, capBits - bits.length);
+    pushBits(0, termLen);
+
+    while (bits.length % 8 !== 0) bits.push(0);
+
+    const dataBytes = [];
+    for (let i = 0; i < bits.length; i += 8) {
+      let byte = 0;
+      for (let j = 0; j < 8; j++) byte = (byte << 1) | bits[i + j];
+      dataBytes.push(byte);
+    }
+    const padBytes = [0xec, 0x11];
+    let padIdx = 0;
+    while (dataBytes.length < totalDataCodewords) {
+      dataBytes.push(padBytes[padIdx % 2]);
+      padIdx++;
+    }
+
+    const ecPerBlock = spec[2];
+    const blocks = [];
+    let offset = 0;
+    for (let i = 0; i < spec[3]; i++) {
+      const slice = dataBytes.slice(offset, offset + spec[4]);
+      offset += spec[4];
+      blocks.push({ data: slice, ec: rsEncode(slice, ecPerBlock) });
+    }
+    for (let i = 0; i < spec[5]; i++) {
+      const slice = dataBytes.slice(offset, offset + spec[6]);
+      offset += spec[6];
+      blocks.push({ data: slice, ec: rsEncode(slice, ecPerBlock) });
+    }
+
+    const finalCodewords = [];
+    const maxDataLen = Math.max(spec[4], spec[6]);
+    for (let i = 0; i < maxDataLen; i++) {
+      for (const b of blocks) {
+        if (i < b.data.length) finalCodewords.push(b.data[i]);
+      }
+    }
+    for (let i = 0; i < ecPerBlock; i++) {
+      for (const b of blocks) {
+        finalCodewords.push(b.ec[i]);
+      }
+    }
+
+    return { version, spec, codewords: finalCodewords };
+  }
+
+  function buildMatrix(text) {
+    const { version, spec, codewords } = encodeData(text);
+    const size = version * 4 + 17;
+    const modules = Array.from({ length: size }, () => new Uint8Array(size));
+    const isFunc = Array.from({ length: size }, () => new Uint8Array(size));
+
+    const setFunc = (r, c, val) => {
+      if (r >= 0 && r < size && c >= 0 && c < size) {
+        modules[r][c] = val ? 1 : 0;
+        isFunc[r][c] = 1;
+      }
+    };
+
+    const placeFinder = (top, left) => {
+      for (let dr = -1; dr <= 7; dr++) {
+        for (let dc = -1; dc <= 7; dc++) {
+          const r = top + dr, c = left + dc;
+          if (r < 0 || r >= size || c < 0 || c >= size) continue;
+          const inOuter = dr >= 0 && dr <= 6 && dc >= 0 && dc <= 6;
+          const onBorder = dr === 0 || dr === 6 || dc === 0 || dc === 6;
+          const inInner = dr >= 2 && dr <= 4 && dc >= 2 && dc <= 4;
+          setFunc(r, c, inOuter && (onBorder || inInner) ? 1 : 0);
+        }
+      }
+    };
+    placeFinder(0, 0);
+    placeFinder(0, size - 7);
+    placeFinder(size - 7, 0);
+
+    const centers = spec[7];
+    for (const r of centers) {
+      for (const c of centers) {
+        if (isFunc[r][c]) continue;
+        for (let dr = -2; dr <= 2; dr++) {
+          for (let dc = -2; dc <= 2; dc++) {
+            const onEdge = Math.abs(dr) === 2 || Math.abs(dc) === 2;
+            const isCenter = dr === 0 && dc === 0;
+            setFunc(r + dr, c + dc, onEdge || isCenter ? 1 : 0);
+          }
+        }
+      }
+    }
+
+    for (let i = 8; i < size - 8; i++) {
+      if (!isFunc[6][i]) setFunc(6, i, i % 2 === 0 ? 1 : 0);
+      if (!isFunc[i][6]) setFunc(i, 6, i % 2 === 0 ? 1 : 0);
+    }
+
+    setFunc(4 * version + 9, 8, 1);
+
+    const formatBits = 0x77c4;
+    for (let i = 0; i <= 5; i++) setFunc(8, i, (formatBits >>> (14 - i)) & 1);
+    setFunc(8, 7, (formatBits >>> 8) & 1);
+    setFunc(8, 8, (formatBits >>> 7) & 1);
+    setFunc(7, 8, (formatBits >>> 6) & 1);
+    for (let i = 0; i <= 5; i++) setFunc(5 - i, 8, (formatBits >>> (5 - i)) & 1);
+
+    for (let i = 0; i <= 6; i++) setFunc(size - 1 - i, 8, (formatBits >>> (14 - i)) & 1);
+    for (let i = 0; i <= 7; i++) setFunc(8, size - 8 + i, (formatBits >>> (7 - i)) & 1);
+
+    if (version >= 7) {
+      const vBits = VERSION_INFO_BITS[version];
+      for (let i = 0; i < 18; i++) {
+        const bit = (vBits >>> i) & 1;
+        const r = Math.floor(i / 3);
+        const c = size - 11 + (i % 3);
+        setFunc(r, c, bit);
+        setFunc(c, r, bit);
+      }
+    }
+
+    const allBits = [];
+    for (const cw of codewords) {
+      for (let b = 7; b >= 0; b--) allBits.push((cw >>> b) & 1);
+    }
+
+    let bitIdx = 0;
+    let upward = true;
+    for (let rightCol = size - 1; rightCol >= 1; rightCol -= 2) {
+      if (rightCol === 6) rightCol = 5;
+      for (let step = 0; step < size; step++) {
+        const r = upward ? (size - 1 - step) : step;
+        for (let dx = 0; dx < 2; dx++) {
+          const c = rightCol - dx;
+          if (!isFunc[r][c]) {
+            const rawBit = bitIdx < allBits.length ? allBits[bitIdx++] : 0;
+            const maskBit = ((r + c) % 2 === 0) ? 1 : 0;
+            modules[r][c] = rawBit ^ maskBit;
+          }
+        }
+      }
+      upward = !upward;
+    }
+
+    return modules;
+  }
+
+  function renderSvg(text, quietZone = 4) {
+    const matrix = buildMatrix(text);
+    const n = matrix.length;
+    const total = n + quietZone * 2;
+    let paths = "";
+    for (let r = 0; r < n; r++) {
+      for (let c = 0; c < n; c++) {
+        if (matrix[r][c]) {
+          paths += `M${c + quietZone},${r + quietZone}h1v1h-1z`;
+        }
+      }
+    }
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${total} ${total}" shape-rendering="crispEdges">
+      <rect width="${total}" height="${total}" fill="#ffffff"/>
+      <path d="${paths}" fill="#000000"/>
+    </svg>`;
+  }
+
+  return { renderSvg };
+})();
+
+/* ============================================================================
+   2. BUILT-IN WEB AUDIO SYNTH ENGINE & SOUND EFFECTS (Zero external audio needed)
+   ============================================================================ */
+const AudioEngine = (() => {
+  let ctx = null;
+  let timerId = null;
+  let isPlaying = false;
+  let startTime = 0;
+  let elapsedOffset = 0;
+  let currentTrackIndex = 0;
+  let masterGain = null;
+  let volume = 0.85;
+  let htmlAudio = new Audio();
+  let onEndedCallback = null;
+
+  function setOnEnded(cb) {
+    onEndedCallback = cb;
+  }
+
+  function ensureCtx() {
+    if (!ctx) {
+      ctx = new (window.AudioContext || window.webkitAudioContext)();
+      masterGain = ctx.createGain();
+      masterGain.gain.value = volume;
+      masterGain.connect(ctx.destination);
+    }
+    if (ctx.state === "suspended") ctx.resume();
+  }
+
+  const DEMO_MELODIES = [
+    {
+      duration: 24,
+      notes: [
+        [523.25,0.25],[659.25,0.25],[783.99,0.25],[1046.5,0.5],[880,0.25],[783.99,0.5],
+        [659.25,0.25],[587.33,0.25],[659.25,0.25],[783.99,0.5],[659.25,0.25],[523.25,0.5],
+        [587.33,0.25],[659.25,0.25],[698.46,0.25],[880,0.5],[783.99,0.25],[698.46,0.25],[659.25,0.5],
+        [783.99,0.25],[880,0.25],[987.77,0.25],[1046.5,0.75],[0,0.25]
+      ]
+    },
+    {
+      duration: 24,
+      notes: [
+        [440,0.2],[440,0.2],[523.25,0.3],[659.25,0.3],[587.33,0.2],[523.25,0.2],[493.88,0.4],
+        [523.25,0.2],[587.33,0.2],[659.25,0.4],[783.99,0.4],[659.25,0.4],
+        [880,0.25],[783.99,0.25],[698.46,0.25],[659.25,0.25],[587.33,0.4],[659.25,0.4],[440,0.6]
+      ]
+    },
+    {
+      duration: 24,
+      notes: [
+        [329.63,0.2],[392.00,0.2],[440.00,0.2],[493.88,0.2],[587.33,0.4],[493.88,0.2],[440.00,0.4],
+        [392.00,0.2],[440.00,0.2],[493.88,0.4],[659.25,0.4],[587.33,0.4],
+        [783.99,0.25],[659.25,0.25],[587.33,0.25],[493.88,0.25],[440.00,0.5],[392.00,0.5]
+      ]
+    },
+    {
+      duration: 24,
+      notes: [
+        [659.25,0.25],[659.25,0.25],[659.25,0.5],[659.25,0.25],[659.25,0.25],[659.25,0.5],
+        [659.25,0.25],[783.99,0.25],[523.25,0.35],[587.33,0.15],[659.25,0.8],
+        [698.46,0.25],[698.46,0.25],[698.46,0.35],[698.46,0.15],[698.46,0.25],[659.25,0.25],[659.25,0.5]
+      ]
+    },
+    {
+      duration: 24,
+      notes: [
+        [293.66,0.25],[293.66,0.25],[440.00,0.35],[392.00,0.35],[369.99,0.35],[329.63,0.45],
+        [293.66,0.25],[293.66,0.25],[587.33,0.4],[523.25,0.3],[493.88,0.3],[440.00,0.5],
+        [493.88,0.25],[523.25,0.25],[587.33,0.5],[659.25,0.5],[587.33,0.75]
+      ]
+    }
+  ];
+
+  let noteStep = 0;
+  let nextNoteAt = 0;
+
+  function playTone(freq, dur, type = "triangle", gainVal = 0.28) {
+    if (!freq || freq <= 0) return;
+    ensureCtx();
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, ctx.currentTime);
+    g.gain.setValueAtTime(gainVal, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur);
+    osc.connect(g);
+    g.connect(masterGain);
+    osc.start();
+    osc.stop(ctx.currentTime + dur);
+  }
+
+  function playSfxBuzz() {
+    ensureCtx();
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = "sawtooth";
+    osc.frequency.setValueAtTime(880, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(587.33, ctx.currentTime + 0.18);
+    g.gain.setValueAtTime(0.45, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+    osc.connect(g);
+    g.connect(masterGain);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.35);
+  }
+
+  function playSfxCorrect() {
+    ensureCtx();
+    const seq = [
+      [523.25, 0, 0.18], [659.25, 0.12, 0.18], [783.99, 0.24, 0.22], [1046.5, 0.38, 0.55]
+    ];
+    seq.forEach(([f, delay, dur]) => {
+      setTimeout(() => playTone(f, dur, "triangle", 0.38), delay * 1000);
+    });
+  }
+
+  function playSfxWrong() {
+    ensureCtx();
+    [155, 146].forEach((f, idx) => {
+      setTimeout(() => playTone(f, 0.26, "sawtooth", 0.4), idx * 240);
+    });
+  }
+
+  function start(track, idx, seekSec = null) {
+    stop(false);
+    currentTrackIndex = idx;
+    if (seekSec !== null) elapsedOffset = Math.max(0, Number(seekSec) || 0);
+    isPlaying = true;
+
+    if (track.audioUrl) {
+      htmlAudio.src = track.audioUrl;
+      htmlAudio.volume = volume;
+      htmlAudio.currentTime = elapsedOffset;
+      htmlAudio.play().catch(() => {});
+    } else {
+      ensureCtx();
+      startTime = performance.now() - elapsedOffset * 1000;
+      noteStep = Math.floor(elapsedOffset * 3);
+      nextNoteAt = 0;
+    }
+
+    timerId = setInterval(() => {
+      if (!isPlaying) return;
+      if (track.audioUrl) {
+        elapsedOffset = htmlAudio.currentTime;
+        if (htmlAudio.ended) {
+          stop(true, Number(track.introSec) || 0);
+          if (onEndedCallback) onEndedCallback();
+        }
+      } else {
+        elapsedOffset = (performance.now() - startTime) / 1000;
+        const demo = DEMO_MELODIES[currentTrackIndex % DEMO_MELODIES.length];
+        if (elapsedOffset >= demo.duration) {
+          stop(true, Number(track.introSec) || 0);
+          if (onEndedCallback) onEndedCallback();
+          return;
+        }
+        if (performance.now() >= nextNoteAt) {
+          const [freq, dur] = demo.notes[noteStep % demo.notes.length];
+          playTone(freq, dur * 0.92, elapsedOffset >= track.chorusSec ? "sawtooth" : "triangle", 0.26);
+          nextNoteAt = performance.now() + dur * 1000;
+          noteStep++;
+        }
+      }
+      updatePlaybackUI();
+    }, 60);
+  }
+
+  function pause() {
+    isPlaying = false;
+    htmlAudio.pause();
+    if (timerId) clearInterval(timerId);
+  }
+
+  function stop(resetPosition = true, resetSec = 0) {
+    isPlaying = false;
+    htmlAudio.pause();
+    if (timerId) clearInterval(timerId);
+    if (resetPosition) elapsedOffset = Math.max(0, Number(resetSec) || 0);
+  }
+
+  function setPosition(track, sec) {
+    elapsedOffset = Math.max(0, Number(sec) || 0);
+    if (track && track.audioUrl) {
+      htmlAudio.src = track.audioUrl;
+      try { htmlAudio.currentTime = elapsedOffset; } catch (e) {}
+    } else {
+      startTime = performance.now() - elapsedOffset * 1000;
+      noteStep = Math.floor(elapsedOffset * 3);
+    }
+  }
+
+  function seek(track, sec) {
+    elapsedOffset = Math.max(0, Number(sec) || 0);
+    if (track.audioUrl) {
+      htmlAudio.currentTime = elapsedOffset;
+    } else {
+      startTime = performance.now() - elapsedOffset * 1000;
+      noteStep = Math.floor(elapsedOffset * 3);
+    }
+    updatePlaybackUI();
+  }
+
+  function setVolume(val) {
+    volume = parseFloat(val);
+    htmlAudio.volume = volume;
+    if (masterGain) masterGain.gain.value = volume;
+  }
+
+  function getDuration(track) {
+    if (track.audioUrl && htmlAudio.duration && !isNaN(htmlAudio.duration)) {
+      return htmlAudio.duration;
+    }
+    return 24;
+  }
+
+  function getCurrentTime() { return elapsedOffset; }
+  function getIsPlaying() { return isPlaying; }
+
+  return { start, pause, stop, setPosition, seek, setVolume, getDuration, getCurrentTime, getIsPlaying, setOnEnded, playSfxBuzz, playSfxCorrect, playSfxWrong };
+})();
+
+/* ============================================================================
+   3. APPLICATION STATE & DEFAULT DATA
+   ============================================================================ */
+const DEFAULT_TEAMS = [
+  { id: "t1", name: "Aチーム（紅組）", color: "#ef4444", score: 0 },
+  { id: "t2", name: "Bチーム（青組）", color: "#3b82f6", score: 0 },
+  { id: "t3", name: "Cチーム（緑組）", color: "#10b981", score: 0 },
+  { id: "t4", name: "Dチーム（黄組）", color: "#f59e0b", score: 0 }
+];
+
+const DEFAULT_TRACKS = [
+  { id: "s1", title: "アイドル / YOASOBI（デモ音源）", artist: "YOASOBI", introSec: 0, chorusSec: 12, audioUrl: null, audioName: "内蔵シンセデモ音源 #1", coverUrl: null },
+  { id: "s2", title: "残酷な天使のテーゼ（デモ音源）", artist: "高橋洋子", introSec: 0, chorusSec: 10, audioUrl: null, audioName: "内蔵シンセデモ音源 #2", coverUrl: null },
+  { id: "s3", title: "Dancing Queen（デモ音源）", artist: "ABBA", introSec: 0, chorusSec: 11, audioUrl: null, audioName: "内蔵シンセデモ音源 #3", coverUrl: null },
+  { id: "s4", title: "恋人がサンタクロース（デモ音源）", artist: "松任谷由実", introSec: 0, chorusSec: 12, audioUrl: null, audioName: "内蔵シンセデモ音源 #4", coverUrl: null },
+  { id: "s5", title: "ultra soul（デモ音源）", artist: "B'z", introSec: 0, chorusSec: 10, audioUrl: null, audioName: "内蔵シンセデモ音源 #5", coverUrl: null }
+];
+
+let state = {
+  roomId: String(Math.floor(1000 + Math.random() * 9000)),
+  teams: JSON.parse(JSON.stringify(DEFAULT_TEAMS)),
+  tracks: JSON.parse(JSON.stringify(DEFAULT_TRACKS)),
+  currentTrackIndex: 0,
+  pointsPerCorrect: 10,
+  penaltyPerWrong: 0,
+  gameState: "idle", // "idle" | "playing" | "buzzed" | "paused_wrong" | "revealed"
+  lockedTeams: [],
+  buzzedTeamId: null,
+  buzzQueue: [],
+  questionStartPerf: 0,
+  hasStartedCurrentQuestion: false,
+  answerTimerId: null,
+  answerSecondsLeft: 10,
+  splitBuzzerOn: false,
+  customBaseUrl: ""
+};
+
+/* ============================================================================
+   4. PEERJS REAL-TIME MULTIPLAYER ENGINE (HOST & SMARTPHONE)
+   ============================================================================ */
+let hostPeer = null;
+const connectedPeers = new Map();
+
+function initHostPeer() {
+  if (hostPeer) {
+    try { hostPeer.destroy(); } catch (e) {}
+  }
+  connectedPeers.clear();
+  updateConnectedDeviceCounts();
+
+  const peerId = `bounenkai-intro-${state.roomId}`;
+  const badge = document.getElementById("hostConnBadge");
+  badge.className = "conn-dot-badge warn";
+  badge.textContent = "● 接続準備中...";
+
+  try {
+    if (typeof Peer === "undefined") {
+      throw new Error("PeerJS is unavailable");
+    }
+
+    hostPeer = new Peer(peerId, {
+      debug: 0,
+      config: {
+        iceServers: [
+          { urls: "stun:stun.l.google.com:19302" },
+          { urls: "stun:stun1.l.google.com:19302" }
+        ]
+      }
+    });
+
+    hostPeer.on("open", () => {
+      badge.className = "conn-dot-badge";
+      badge.textContent = "● スマホ受付OK";
+      document.getElementById("hostRoomIdDisplay").textContent = state.roomId;
+      document.getElementById("modalRoomId").textContent = state.roomId;
+      refreshQrCode();
+    });
+
+    hostPeer.on("connection", (conn) => {
+      connectedPeers.set(conn.peer, { conn, teamId: null });
+      updateConnectedDeviceCounts();
+
+      conn.on("open", () => {
+        sendStateToConn(conn);
+      });
+
+      conn.on("data", (msg) => {
+        if (!msg || typeof msg !== "object") return;
+        if (msg.type === "JOIN_TEAM") {
+          const entry = connectedPeers.get(conn.peer);
+          if (entry) entry.teamId = msg.teamId;
+          updateConnectedDeviceCounts();
+          broadcastHostState();
+        } else if (msg.type === "BUZZ") {
+          handleIncomingBuzz(msg.teamId);
+        } else if (msg.type === "CANCEL_BUZZ") {
+          if (state.gameState === "buzzed" && state.buzzedTeamId === msg.teamId) {
+            cancelBuzz();
+          }
+        } else if (msg.type === "REQUEST_SYNC") {
+          sendStateToConn(conn);
+        }
+      });
+
+      conn.on("close", () => {
+        connectedPeers.delete(conn.peer);
+        updateConnectedDeviceCounts();
+      });
+
+      conn.on("error", () => {
+        connectedPeers.delete(conn.peer);
+        updateConnectedDeviceCounts();
+      });
+    });
+
+    hostPeer.on("error", (err) => {
+      if (err && err.type === "unavailable-id") {
+        state.roomId = String(Math.floor(1000 + Math.random() * 9000));
+        initHostPeer();
+      } else {
+        badge.className = "conn-dot-badge warn";
+        badge.textContent = "● ローカル動作中（外部通信制限）";
+        document.getElementById("hostRoomIdDisplay").textContent = state.roomId;
+        document.getElementById("modalRoomId").textContent = state.roomId;
+        refreshQrCode();
+      }
+    });
+  } catch (e) {
+    // プレビュー環境(Canvas)などでWebSocketが制限されている場合の安全なフォールバック
+    hostPeer = null;
+    badge.className = "conn-dot-badge warn";
+    badge.textContent = "● プレビューモード（1画面スイッチ可）";
+    document.getElementById("hostRoomIdDisplay").textContent = state.roomId;
+    document.getElementById("modalRoomId").textContent = state.roomId;
+    refreshQrCode();
+  }
+}
+
+function updateConnectedDeviceCounts() {
+  document.getElementById("totalDevicesBadge").textContent = `${connectedPeers.size}台`;
+  renderScoreboard();
+}
+
+function regenerateRoomId() {
+  state.roomId = String(Math.floor(1000 + Math.random() * 9000));
+  initHostPeer();
+  showToast(`新しいROOM ID「${state.roomId}」を発行しました`);
+}
+
+/* ============================================================================
+   5. QR CODE URL & MODAL MANAGEMENT
+   ============================================================================ */
+function getEffectiveBaseUrl() {
+  const inputVal = document.getElementById("baseUrlInput").value.trim();
+  if (inputVal) return inputVal.split("?")[0];
+  const loc = window.location.href.split("?")[0];
+  return loc;
+}
+
+function getFullShareUrl() {
+  const base = getEffectiveBaseUrl();
+  const sep = base.includes("?") ? "&" : "?";
+  return `${base}${sep}room=${state.roomId}`;
+}
+
+function refreshQrCode() {
+  const fullUrl = getFullShareUrl();
+  const container = document.getElementById("qrSvgContainer");
+  try {
+    container.innerHTML = IsoQrGenerator.renderSvg(fullUrl, 4);
+  } catch (e) {
+    container.innerHTML = `<div style="color:#000;padding:20px;font-size:12px;">URLが長すぎます</div>`;
+  }
+  const testLink = document.getElementById("testPhoneLink");
+  testLink.href = fullUrl;
+
+  const warnEl = document.getElementById("localFileWarning");
+  if (!fullUrl.startsWith("http://") && !fullUrl.startsWith("https://")) {
+    warnEl.style.display = "block";
+  } else {
+    warnEl.style.display = "none";
+  }
+}
+
+function openQrModal() {
+  const baseInput = document.getElementById("baseUrlInput");
+  if (!baseInput.value) {
+    baseInput.value = window.location.href.split("?")[0];
+  }
+  refreshQrCode();
+  document.getElementById("qrModal").style.display = "flex";
+}
+
+function closeQrModal() {
+  document.getElementById("qrModal").style.display = "none";
+}
+
+function copyShareUrl() {
+  const url = getFullShareUrl();
+  const temp = document.createElement("input");
+  temp.value = url;
+  document.body.appendChild(temp);
+  temp.select();
+  document.execCommand("copy");
+  document.body.removeChild(temp);
+  showToast("参加用URLをコピーしました！");
+}
+
+/* ============================================================================
+   6. HOST QUIZ GAMEPLAY LOGIC
+   ============================================================================ */
+function currentTrack() {
+  return state.tracks[state.currentTrackIndex] || state.tracks[0];
+}
+
+function changeTrack(delta) {
+  clearAnswerTimer();
+  state.currentTrackIndex = (state.currentTrackIndex + delta + state.tracks.length) % state.tracks.length;
+  const track = currentTrack();
+  const introStart = Math.max(0, Number(track.introSec) || 0);
+  AudioEngine.stop(true, introStart);
+  AudioEngine.setPosition(track, introStart);
+  state.gameState = "idle";
+  state.lockedTeams = [];
+  state.buzzedTeamId = null;
+  state.buzzQueue = [];
+  state.hasStartedCurrentQuestion = false;
+  document.getElementById("judgeBox").style.display = "none";
+  document.getElementById("resumeBanner").style.display = "none";
+  renderAllHostUI();
+  broadcastHostState();
+}
+
+function togglePlayPause() {
+  const track = currentTrack();
+  if (AudioEngine.getIsPlaying()) {
+    AudioEngine.pause();
+    if (state.gameState === "playing") state.gameState = "idle";
+  } else {
+    if (state.gameState === "buzzed") return;
+    document.getElementById("resumeBanner").style.display = "none";
+    const introStart = Math.max(0, Number(track.introSec) || 0);
+    if (!state.hasStartedCurrentQuestion) {
+      state.hasStartedCurrentQuestion = true;
+      state.questionStartPerf = performance.now();
+      state.buzzQueue = [];
+      const cur = AudioEngine.getCurrentTime();
+      const startFrom = cur === 0 ? introStart : cur;
+      AudioEngine.start(track, state.currentTrackIndex, startFrom);
+    } else {
+      AudioEngine.start(track, state.currentTrackIndex);
+    }
+    if (state.gameState !== "revealed") state.gameState = "playing";
+  }
+  renderAllHostUI();
+  broadcastHostState();
+}
+
+function playFromChorus() {
+  const track = currentTrack();
+  document.getElementById("resumeBanner").style.display = "none";
+  state.hasStartedCurrentQuestion = true;
+  AudioEngine.start(track, state.currentTrackIndex, Number(track.chorusSec) || 0);
+  if (state.gameState !== "revealed") state.gameState = "playing";
+  renderAllHostUI();
+  broadcastHostState();
+}
+
+function revealAnswer(autoPlayChorus = true) {
+  const track = currentTrack();
+  clearAnswerTimer();
+  state.gameState = "revealed";
+  state.buzzedTeamId = null;
+  document.getElementById("judgeBox").style.display = "none";
+  document.getElementById("resumeBanner").style.display = "none";
+
+  AudioEngine.playSfxCorrect();
+  launchConfetti();
+
+  if (autoPlayChorus) {
+    AudioEngine.start(track, state.currentTrackIndex, Number(track.chorusSec) || 0);
+  } else {
+    AudioEngine.pause();
+  }
+  renderAllHostUI();
+  broadcastHostState();
+}
+
+function handleIncomingBuzz(teamId) {
+  if (!AudioEngine.getIsPlaying() || state.gameState !== "playing") {
+    return;
+  }
+  if (state.lockedTeams.includes(teamId)) return;
+
+  const team = state.teams.find(t => t.id === teamId);
+  if (!team) return;
+
+  AudioEngine.pause();
+  AudioEngine.playSfxBuzz();
+
+  const elapsed = state.questionStartPerf ? ((performance.now() - state.questionStartPerf) / 1000) : 0.12;
+  state.gameState = "buzzed";
+  state.buzzedTeamId = teamId;
+  state.buzzQueue = [{ teamId, timeSec: elapsed }];
+
+  clearAnswerTimer();
+  state.answerSecondsLeft = 10;
+  document.getElementById("answerCountdownBadge").textContent = `残り ${state.answerSecondsLeft}秒`;
+  state.answerTimerId = setInterval(() => {
+    state.answerSecondsLeft--;
+    if (state.answerSecondsLeft <= 0) {
+      clearAnswerTimer();
+      document.getElementById("answerCountdownBadge").textContent = "時間切れ！";
+    } else {
+      document.getElementById("answerCountdownBadge").textContent = `残り ${state.answerSecondsLeft}秒`;
+    }
+  }, 1000);
+
+  renderAllHostUI();
+  broadcastHostState();
+}
+
+function cancelBuzz() {
+  if (state.gameState !== "buzzed") return;
+  clearAnswerTimer();
+  const team = state.teams.find(t => t.id === state.buzzedTeamId);
+  state.buzzedTeamId = null;
+  state.buzzQueue = [];
+  document.getElementById("judgeBox").style.display = "none";
+  document.getElementById("resumeBanner").style.display = "none";
+
+  const track = currentTrack();
+  AudioEngine.start(track, state.currentTrackIndex);
+  state.gameState = "playing";
+
+  renderAllHostUI();
+  broadcastHostState();
+  showToast(`↩ ${team ? team.name + " の" : ""}回答を取り下げました（音楽を再開します）`);
+}
+
+function judgeAnswer(isCorrect) {
+  clearAnswerTimer();
+  const team = state.teams.find(t => t.id === state.buzzedTeamId);
+  if (!team) return;
+
+  if (isCorrect) {
+    team.score += state.pointsPerCorrect;
+    showToast(`🎉 ${team.name} 正解！ +${state.pointsPerCorrect}pt`);
+    revealAnswer(true);
+  } else {
+    AudioEngine.playSfxWrong();
+    if (!state.lockedTeams.includes(team.id)) {
+      state.lockedTeams.push(team.id);
+    }
+    const penalty = Math.max(0, Number(state.penaltyPerWrong) || 0);
+    if (penalty > 0) {
+      team.score -= penalty;
+    }
+    state.buzzedTeamId = null;
+    state.gameState = "paused_wrong";
+    document.getElementById("judgeBox").style.display = "none";
+    const banner = document.getElementById("resumeBanner");
+    const penaltyText = penalty > 0 ? ` / -${penalty}pt 減点` : "";
+    document.getElementById("resumeBannerText").textContent = `❌ ${team.name} 不正解！お手つきロック${penaltyText}（音楽は停止中）`;
+    banner.style.display = "block";
+
+    renderAllHostUI();
+    broadcastHostState();
+  }
+}
+
+function resumeAfterWrong() {
+  document.getElementById("resumeBanner").style.display = "none";
+  const track = currentTrack();
+  AudioEngine.start(track, state.currentTrackIndex);
+  state.gameState = "playing";
+  renderAllHostUI();
+  broadcastHostState();
+}
+
+function unlockAllTeams() {
+  state.lockedTeams = [];
+  renderAllHostUI();
+  broadcastHostState();
+  showToast("全チームのロックを解除しました");
+}
+
+function adjustScore(teamId, delta) {
+  const t = state.teams.find(x => x.id === teamId);
+  if (t) {
+    t.score += delta;
+    renderScoreboard();
+    broadcastHostState();
+  }
+}
+
+function clearAnswerTimer() {
+  if (state.answerTimerId) {
+    clearInterval(state.answerTimerId);
+    state.answerTimerId = null;
+  }
+}
+
+/* ============================================================================
+   7. HOST UI RENDERING
+   ============================================================================ */
+function formatTime(sec) {
+  const s = Math.max(0, Math.floor(sec));
+  const m = Math.floor(s / 60);
+  const rem = s % 60;
+  return `${m}:${String(rem).padStart(2, "0")}`;
+}
+
+function updatePlaybackUI() {
+  const track = currentTrack();
+  const cur = AudioEngine.getCurrentTime();
+  const dur = AudioEngine.getDuration(track);
+  document.getElementById("timeCurrent").textContent = formatTime(cur);
+  document.getElementById("timeDuration").textContent = formatTime(dur);
+  const slider = document.getElementById("seekSlider");
+  slider.max = dur;
+  slider.value = cur;
+}
+
+function onSeekInput(val) {
+  state.hasStartedCurrentQuestion = true;
+  AudioEngine.seek(currentTrack(), parseFloat(val));
+}
+
+function onVolumeChange(val) {
+  AudioEngine.setVolume(val);
+}
+
+function renderRunnerUps() {
+  const el = document.getElementById("runnerUpList");
+  if (state.buzzQueue.length <= 1) {
+    el.textContent = "";
+    return;
+  }
+  const firstTime = state.buzzQueue[0].timeSec;
+  const others = state.buzzQueue.slice(1).map((b, idx) => {
+    const t = state.teams.find(x => x.id === b.teamId);
+    const diff = (b.timeSec - firstTime).toFixed(2);
+    return `${idx + 2}位: ${t ? t.name : ""} (+${diff}秒)`;
+  });
+  el.textContent = "タッチの差: " + others.join(" / ");
+}
+
+function renderAllHostUI() {
+  const track = currentTrack();
+  const isPlaying = AudioEngine.getIsPlaying();
+  const isRevealed = state.gameState === "revealed";
+
+  document.getElementById("trackCounterPill").textContent = `第${state.currentTrackIndex + 1}問 / 全${state.tracks.length}問`;
+
+  const vinyl = document.getElementById("vinylDisc");
+  vinyl.classList.toggle("spinning", isPlaying);
+
+  const coverBox = document.getElementById("coverRevealBox");
+  const coverImg = document.getElementById("coverRevealImg");
+  if (isRevealed && track.coverUrl) {
+    coverImg.src = track.coverUrl;
+    coverBox.style.display = "block";
+  } else {
+    coverBox.style.display = "none";
+  }
+
+  const chip = document.getElementById("stageStatusChip");
+  chip.className = "status-chip";
+  if (state.gameState === "buzzed") {
+    chip.classList.add("buzzed");
+    chip.textContent = "🚨 早押し発生！解答判定中";
+  } else if (isRevealed) {
+    chip.classList.add("revealed");
+    chip.textContent = "🎉 正解発表！（スマホロック中）";
+  } else if (isPlaying && state.gameState === "playing") {
+    chip.classList.add("playing");
+    chip.textContent = "🔊 再生中！早押し受付中";
+  } else if (state.gameState === "paused_wrong") {
+    chip.textContent = "⏸ 不正解により一時停止中（スマホロック中）";
+  } else {
+    chip.textContent = "🔒 停止中（音楽再生で早押し解除）";
+  }
+
+  document.getElementById("stageSongTitle").textContent = isRevealed ? track.title : "？？？？？？";
+  document.getElementById("stageSongArtist").textContent = isRevealed ? `アーティスト：${track.artist}` : "アーティスト：？？？";
+
+  const vinylLabel = document.getElementById("vinylLabel");
+  if (isRevealed && track.coverUrl) {
+    vinylLabel.innerHTML = `<img src="${track.coverUrl}" alt="ジャケット">`;
+  } else {
+    vinylLabel.innerHTML = "🎶";
+  }
+
+  const playBtn = document.getElementById("btnMainPlay");
+  playBtn.textContent = isPlaying ? "⏸ 一時停止" : "▶ イントロ再生";
+
+  const judgeBox = document.getElementById("judgeBox");
+  if (state.gameState === "buzzed" && state.buzzedTeamId) {
+    const bTeam = state.teams.find(t => t.id === state.buzzedTeamId);
+    judgeBox.style.display = "block";
+    document.getElementById("buzzedTeamTitle").textContent = bTeam ? bTeam.name : "";
+    document.getElementById("buzzedTeamTitle").style.color = bTeam ? bTeam.color : "#fff";
+    const firstT = state.buzzQueue[0] ? state.buzzQueue[0].timeSec.toFixed(2) : "0.00";
+    document.getElementById("buzzReactionBadge").textContent = `⏱ ${firstT}秒`;
+    document.getElementById("judgePointsLabel").textContent = state.pointsPerCorrect;
+    const penalty = Math.max(0, Number(state.penaltyPerWrong) || 0);
+    document.getElementById("btnJudgeWrong").textContent = penalty > 0
+      ? `❌ 不正解（お手つきロック / -${penalty}pt）`
+      : `❌ 不正解（お手つきロック）`;
+    renderRunnerUps();
+  } else {
+    judgeBox.style.display = "none";
+  }
+
+  updatePlaybackUI();
+  renderScoreboard();
+  renderSplitBuzzer();
+}
+
+function renderScoreboard() {
+  const list = document.getElementById("scoreboardList");
+  const sorted = [...state.teams].sort((a, b) => b.score - a.score);
+  list.innerHTML = sorted.map((t, idx) => {
+    let devCount = 0;
+    for (const entry of connectedPeers.values()) {
+      if (entry.teamId === t.id) devCount++;
+    }
+    const isLocked = state.lockedTeams.includes(t.id);
+    const isBuzzed = state.buzzedTeamId === t.id;
+    return `
+      <div class="team-row ${isLocked ? "locked" : ""} ${isBuzzed ? "buzzed" : ""}">
+        <div class="team-left">
+          <div class="rank-badge" style="background:${t.color};">${idx + 1}</div>
+          <div style="min-width:0;">
+            <div class="team-info-name">${escapeHtml(t.name)} ${isLocked ? "🔒" : ""}</div>
+            <div class="team-info-sub">📱 接続スマホ: ${devCount}台</div>
+          </div>
+        </div>
+        <div class="team-right">
+          <button class="btn-pt" onclick="adjustScore('${t.id}', -10)">-10</button>
+          <div class="score-val">${t.score}<span style="font-size:12px;">pt</span></div>
+          <button class="btn-pt plus" onclick="adjustScore('${t.id}', 10)">+10</button>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+function toggleSplitBuzzer() {
+  state.splitBuzzerOn = !state.splitBuzzerOn;
+  const btn = document.getElementById("btnSplitToggle");
+  btn.textContent = `🎛 1画面スイッチ: ${state.splitBuzzerOn ? "ON" : "OFF"}`;
+  btn.classList.toggle("active", state.splitBuzzerOn);
+  document.getElementById("splitBuzzerPanel").style.display = state.splitBuzzerOn ? "block" : "none";
+  renderSplitBuzzer();
+}
+
+function renderSplitBuzzer() {
+  if (!state.splitBuzzerOn) return;
+  const grid = document.getElementById("splitBuzzerGrid");
+  const canBuzz = AudioEngine.getIsPlaying() && state.gameState === "playing";
+  grid.innerHTML = state.teams.map((t, i) => {
+    const disabled = !canBuzz || state.lockedTeams.includes(t.id);
+    return `<button class="btn-split-team" style="background:${t.color};" ${disabled ? "disabled" : ""} onclick="handleIncomingBuzz('${t.id}')">
+      [${i + 1}] ${escapeHtml(t.name)}
+    </button>`;
+  }).join("");
+}
+
+function switchHostTab(tab) {
+  const isQuiz = tab === "quiz";
+  document.getElementById("quizView").style.display = isQuiz ? "grid" : "none";
+  document.getElementById("settingsView").style.display = isQuiz ? "none" : "block";
+  document.getElementById("tabQuizBtn").classList.toggle("active", isQuiz);
+  document.getElementById("tabSettingsBtn").classList.toggle("active", !isQuiz);
+  if (!isQuiz) renderSettingsView();
+}
+
+/* ============================================================================
+   8. SETTINGS EDITOR (TEAMS & TRACKLIST)
+   ============================================================================ */
+function renderSettingsView() {
+  document.getElementById("pointsPerQuestionInput").value = state.pointsPerCorrect;
+  document.getElementById("penaltyPerWrongInput").value = state.penaltyPerWrong;
+
+  const tList = document.getElementById("teamSettingsList");
+  tList.innerHTML = state.teams.map((t, idx) => `
+    <div class="setting-row">
+      <input type="color" value="${t.color}" style="width:42px;height:36px;padding:2px;" onchange="updateTeamField(${idx}, 'color', this.value)">
+      <input type="text" value="${escapeHtml(t.name)}" style="flex:1;min-width:140px;" onchange="updateTeamField(${idx}, 'name', this.value)">
+      ${state.teams.length > 2 ? `<button class="btn-pt" style="color:#fca5a5;" onclick="removeTeam(${idx})">削除</button>` : ""}
+    </div>
+  `).join("");
+
+  const sList = document.getElementById("trackSettingsList");
+  sList.innerHTML = state.tracks.map((s, idx) => `
+    <div class="track-edit-card">
+      <div class="track-edit-top">
+        <strong style="color:var(--accent);">第${idx + 1}問</strong>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button class="btn-pt" ${idx === 0 ? "disabled style='opacity:0.4;cursor:not-allowed;'" : ""} onclick="moveTrack(${idx}, -1)" title="1つ上へ">▲ 上へ</button>
+          <button class="btn-pt" ${idx === state.tracks.length - 1 ? "disabled style='opacity:0.4;cursor:not-allowed;'" : ""} onclick="moveTrack(${idx}, 1)" title="1つ下へ">▼ 下へ</button>
+          <button class="btn-pt" onclick="testPlayTrack(${idx})">▶ 試聴</button>
+          ${state.tracks.length > 1 ? `<button class="btn-pt" style="color:#fca5a5;" onclick="removeTrack(${idx})">削除</button>` : ""}
+        </div>
+      </div>
+      <div class="track-edit-fields">
+        <input type="text" value="${escapeHtml(s.title)}" placeholder="曲名" onchange="updateTrackField(${idx}, 'title', this.value)">
+        <input type="text" value="${escapeHtml(s.artist)}" placeholder="アーティスト名" onchange="updateTrackField(${idx}, 'artist', this.value)">
+      </div>
+      <div class="track-time-fields">
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span style="font-size:12px;color:#34d399;font-weight:800;">▶ 通常開始秒:</span>
+          <input type="number" value="${s.introSec || 0}" min="0" max="600" style="width:72px;padding:6px 8px;" onchange="updateTrackField(${idx}, 'introSec', Math.max(0, Number(this.value) || 0))">
+          <span style="font-size:11px;color:var(--muted);">秒</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span style="font-size:12px;color:#818cf8;font-weight:800;">🎵 正解サビ秒:</span>
+          <input type="number" value="${s.chorusSec || 0}" min="0" max="600" style="width:72px;padding:6px 8px;" onchange="updateTrackField(${idx}, 'chorusSec', Math.max(0, Number(this.value) || 0))">
+          <span style="font-size:11px;color:var(--muted);">秒</span>
+        </div>
+      </div>
+      <div class="file-upload-row">
+        <label class="btn-pt" style="cursor:pointer;">
+          🎵 音源ファイル選択 (MP3/WAV/M4A)
+          <input type="file" accept="audio/*" style="display:none;" onchange="uploadTrackAudio(${idx}, this.files[0])">
+        </label>
+        <span>${escapeHtml(s.audioName)}</span>
+        <label class="btn-pt" style="cursor:pointer;">
+          🖼 ジャケット画像
+          <input type="file" accept="image/*" style="display:none;" onchange="uploadTrackCover(${idx}, this.files[0])">
+        </label>
+        ${s.coverUrl ? `<span style="color:#34d399;">✓ 画像設定済</span>` : ""}
+      </div>
+    </div>
+  `).join("");
+}
+
+function updatePointsSetting(val) {
+  state.pointsPerCorrect = Math.max(1, parseInt(val, 10) || 10);
+  renderAllHostUI();
+}
+
+function updatePenaltySetting(val) {
+  const num = parseInt(val, 10);
+  state.penaltyPerWrong = isNaN(num) ? 0 : Math.abs(num);
+  document.getElementById("penaltyPerWrongInput").value = state.penaltyPerWrong;
+  renderAllHostUI();
+}
+
+function updateTeamField(idx, key, val) {
+  state.teams[idx][key] = val;
+  renderAllHostUI();
+  broadcastHostState();
+}
+
+function addTeam() {
+  if (state.teams.length >= 8) return showToast("最大8チームまでです");
+  const palette = ["#ef4444", "#3b82f6", "#10b981", "#f59e0b", "#8b5cf6", "#ec4899", "#06b6d4", "#84cc16"];
+  const n = state.teams.length;
+  state.teams.push({
+    id: "t" + Date.now(),
+    name: `${String.fromCharCode(65 + n)}チーム`,
+    color: palette[n % palette.length],
+    score: 0
+  });
+  renderSettingsView();
+  renderAllHostUI();
+  broadcastHostState();
+}
+
+function removeTeam(idx) {
+  state.teams.splice(idx, 1);
+  renderSettingsView();
+  renderAllHostUI();
+  broadcastHostState();
+}
+
+function updateTrackField(idx, key, val) {
+  state.tracks[idx][key] = val;
+  if (idx === state.currentTrackIndex && key === "introSec" && !AudioEngine.getIsPlaying() && !state.hasStartedCurrentQuestion) {
+    const track = currentTrack();
+    const introStart = Math.max(0, Number(track.introSec) || 0);
+    AudioEngine.setPosition(track, introStart);
+  }
+  renderAllHostUI();
+}
+
+function addBlankTrack() {
+  state.tracks.push({
+    id: "s" + Date.now(),
+    title: `新曲タイトル #${state.tracks.length + 1}`,
+    artist: "アーティスト名",
+    introSec: 0,
+    chorusSec: 15,
+    audioUrl: null,
+    audioName: "内蔵シンセデモ音源",
+    coverUrl: null
+  });
+  renderSettingsView();
+  renderAllHostUI();
+}
+
+function removeTrack(idx) {
+  state.tracks.splice(idx, 1);
+  if (state.currentTrackIndex >= state.tracks.length) state.currentTrackIndex = 0;
+  renderSettingsView();
+  renderAllHostUI();
+}
+
+function moveTrack(idx, delta) {
+  const targetIdx = idx + delta;
+  if (targetIdx < 0 || targetIdx >= state.tracks.length) return;
+  const currentId = currentTrack().id;
+  const temp = state.tracks[idx];
+  state.tracks[idx] = state.tracks[targetIdx];
+  state.tracks[targetIdx] = temp;
+  const newCurrentIdx = state.tracks.findIndex(t => t.id === currentId);
+  if (newCurrentIdx !== -1) state.currentTrackIndex = newCurrentIdx;
+  renderSettingsView();
+  renderAllHostUI();
+}
+
+function uploadTrackAudio(idx, file) {
+  if (!file) return;
+  const url = URL.createObjectURL(file);
+  state.tracks[idx].audioUrl = url;
+  state.tracks[idx].audioName = file.name;
+  const cleanName = file.name.replace(/\.[^/.]+$/, "");
+  if (state.tracks[idx].title.includes("デモ音源") || state.tracks[idx].title.startsWith("新曲タイトル")) {
+    state.tracks[idx].title = cleanName;
+  }
+  renderSettingsView();
+  renderAllHostUI();
+  showToast(`「${file.name}」を設定しました`);
+}
+
+function bulkUploadTracks(files) {
+  if (!files || !files.length) return;
+  Array.from(files).forEach((file) => {
+    const url = URL.createObjectURL(file);
+    const cleanName = file.name.replace(/\.[^/.]+$/, "");
+    state.tracks.push({
+      id: "s" + Date.now() + Math.random(),
+      title: cleanName,
+      artist: "アーティスト未設定",
+      introSec: 0,
+      chorusSec: 15,
+      audioUrl: url,
+      audioName: file.name,
+      coverUrl: null
+    });
+  });
+  renderSettingsView();
+  renderAllHostUI();
+  showToast(`${files.length}曲を追加しました`);
+}
+
+function uploadTrackCover(idx, file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    state.tracks[idx].coverUrl = e.target.result;
+    renderSettingsView();
+    renderAllHostUI();
+    showToast("ジャケット画像を設定しました");
+  };
+  reader.readAsDataURL(file);
+}
+
+function testPlayTrack(idx) {
+  state.currentTrackIndex = idx;
+  const track = currentTrack();
+  const introStart = Math.max(0, Number(track.introSec) || 0);
+  AudioEngine.stop(true, introStart);
+  AudioEngine.setPosition(track, introStart);
+  state.gameState = "idle";
+  state.lockedTeams = [];
+  state.buzzedTeamId = null;
+  state.hasStartedCurrentQuestion = false;
+  switchHostTab("quiz");
+  togglePlayPause();
+}
+
+/* ============================================================================
+   9. SMARTPHONE PLAYER CLIENT LOGIC (?room=XXXX)
+   ============================================================================ */
+let mobilePeer = null;
+let mobileConn = null;
+let mobileRoomId = "";
+let mobileSelectedTeamId = null;
+let mobileHostState = { teams: [], lockedTeams: [], buzzedTeamId: null, gameState: "idle", isPlaying: false };
+let mobileWatchdogTimer = null;
+let lastMobileBuzzAt = 0;
+
+function initMobileMode(roomParam) {
+  document.getElementById("hostApp").style.display = "none";
+  document.getElementById("mobileApp").style.display = "flex";
+
+  if (roomParam && /^\d{4}$/.test(roomParam)) {
+    const savedTeam = sessionStorage.getItem(`bounenkai_team_${roomParam}`);
+    if (savedTeam) mobileSelectedTeamId = savedTeam;
+    connectToHostRoom(roomParam);
+  } else {
+    document.getElementById("mobileManualConnect").style.display = "block";
+    document.getElementById("mobileConnStatus").textContent = "● ROOM IDを入力してください";
+  }
+}
+
+function connectManualRoom() {
+  const val = document.getElementById("manualRoomInput").value.trim();
+  if (!/^\d{4}$/.test(val)) return showToast("4桁の数字を入力してください");
+  document.getElementById("mobileManualConnect").style.display = "none";
+  const savedTeam = sessionStorage.getItem(`bounenkai_team_${val}`);
+  if (savedTeam) mobileSelectedTeamId = savedTeam;
+  connectToHostRoom(val);
+}
+
+function manualMobileReconnect() {
+  if (!mobileRoomId) {
+    document.getElementById("mobileManualConnect").style.display = "block";
+    return;
+  }
+  showToast("PCホストへ再接続しています...");
+  connectToHostRoom(mobileRoomId);
+}
+
+function connectToHostRoom(roomId) {
+  mobileRoomId = roomId;
+  document.getElementById("mobileRoomDisplay").textContent = roomId;
+  const statusEl = document.getElementById("mobileConnStatus");
+  statusEl.style.color = "#fbbf24";
+  statusEl.textContent = "● PCホストへ接続中...";
+
+  if (mobileWatchdogTimer) {
+    clearTimeout(mobileWatchdogTimer);
+    mobileWatchdogTimer = null;
+  }
+  if (mobileConn) {
+    try { mobileConn.close(); } catch (e) {}
+    mobileConn = null;
+  }
+  if (mobilePeer) {
+    try { mobilePeer.destroy(); } catch (e) {}
+    mobilePeer = null;
+  }
+
+  let connectedOpened = false;
+  mobileWatchdogTimer = setTimeout(() => {
+    if (!connectedOpened && mobileRoomId === roomId) {
+      statusEl.style.color = "#fbbf24";
+      statusEl.textContent = "● 接続再試行中...（「再接続」も押せます）";
+      connectToHostRoom(roomId);
+    }
+  }, 4500);
+
+  try {
+    if (typeof Peer === "undefined") {
+      throw new Error("PeerJS is unavailable");
+    }
+
+    mobilePeer = new Peer({
+      debug: 0,
+      config: {
+        iceServers: [
+          { urls: "stun:stun.l.google.com:19302" },
+          { urls: "stun:stun1.l.google.com:19302" }
+        ]
+      }
+    });
+
+    mobilePeer.on("open", () => {
+      const conn = mobilePeer.connect(`bounenkai-intro-${roomId}`, {
+        serialization: "json"
+      });
+      mobileConn = conn;
+
+      conn.on("open", () => {
+        connectedOpened = true;
+        if (mobileWatchdogTimer) {
+          clearTimeout(mobileWatchdogTimer);
+          mobileWatchdogTimer = null;
+        }
+        statusEl.style.color = "#34d399";
+        statusEl.textContent = "● PCホスト接続完了！";
+        conn.send({ type: "REQUEST_SYNC" });
+        if (mobileSelectedTeamId) {
+          conn.send({ type: "JOIN_TEAM", teamId: mobileSelectedTeamId });
+        }
+      });
+
+      conn.on("data", (msg) => {
+        if (msg && msg.type === "HOST_STATE") {
+          mobileHostState = msg;
+          renderMobileUI();
+        }
+      });
+
+      conn.on("close", () => {
+        connectedOpened = false;
+        statusEl.style.color = "#ef4444";
+        statusEl.textContent = "● 切断されました（右上の「再接続」をタップ）";
+      });
+
+      conn.on("error", () => {
+        statusEl.style.color = "#ef4444";
+        statusEl.textContent = "● 通信エラー（右上の「再接続」をタップ）";
+      });
+    });
+
+    mobilePeer.on("error", () => {
+      if (mobileWatchdogTimer) {
+        clearTimeout(mobileWatchdogTimer);
+        mobileWatchdogTimer = null;
+      }
+      statusEl.style.color = "#ef4444";
+      statusEl.textContent = "● PCホストが見つかりません（ID確認）";
+      document.getElementById("mobileManualConnect").style.display = "block";
+    });
+  } catch (e) {
+    if (mobileWatchdogTimer) {
+      clearTimeout(mobileWatchdogTimer);
+      mobileWatchdogTimer = null;
+    }
+    mobilePeer = null;
+    statusEl.style.color = "#ef4444";
+    statusEl.textContent = "● この環境では外部通信が制限されています";
+  }
+}
+
+function handleMobileCancelBuzz() {
+  if (!mobileSelectedTeamId) return;
+  if (mobileConn && mobileConn.open) {
+    mobileConn.send({ type: "CANCEL_BUZZ", teamId: mobileSelectedTeamId });
+    showToast("回答を取り下げました");
+  }
+}
+
+function renderMobileUI() {
+  const selectStep = document.getElementById("mobileTeamSelectStep");
+  const buzzerStep = document.getElementById("mobileBuzzerStep");
+  const teams = mobileHostState.teams || [];
+
+  if (!mobileSelectedTeamId) {
+    selectStep.style.display = "block";
+    buzzerStep.style.display = "none";
+    document.getElementById("mobileTeamGrid").innerHTML = teams.map(t => `
+      <button class="btn-select-team" style="background:${t.color};" onclick="selectMobileTeam('${t.id}')">
+        <span>${escapeHtml(t.name)}</span>
+        <span style="font-size:14px;">参加する ▶</span>
+      </button>
+    `).join("");
+    return;
+  }
+
+  const myTeam = teams.find(t => t.id === mobileSelectedTeamId);
+  if (!myTeam) {
+    mobileSelectedTeamId = null;
+    renderMobileUI();
+    return;
+  }
+
+  selectStep.style.display = "none";
+  buzzerStep.style.display = "flex";
+  document.getElementById("mobileMyTeamName").textContent = myTeam.name;
+  document.getElementById("mobileMyTeamName").style.color = myTeam.color;
+  document.getElementById("mobileMyTeamScore").textContent = `${myTeam.score} pt`;
+
+  const btn = document.getElementById("massiveBuzzerBtn");
+  const mainTxt = document.getElementById("buzzerMainText");
+  const subTxt = document.getElementById("buzzerSubText");
+  const withdrawBtn = document.getElementById("mobileWithdrawBtn");
+  btn.style.background = myTeam.color;
+
+  const isLocked = (mobileHostState.lockedTeams || []).includes(myTeam.id);
+  const isMyBuzz = mobileHostState.buzzedTeamId === myTeam.id;
+  const isOtherBuzz = mobileHostState.buzzedTeamId && !isMyBuzz;
+  const isMusicActive = mobileHostState.isPlaying === true && mobileHostState.gameState === "playing";
+
+  withdrawBtn.style.display = isMyBuzz ? "block" : "none";
+
+  if (isLocked) {
+    btn.disabled = true;
+    mainTxt.textContent = "お手つきロック中";
+    subTxt.textContent = "次の問題までお待ちください";
+  } else if (isMyBuzz) {
+    btn.disabled = true;
+    mainTxt.textContent = "🚨 解答権獲得！";
+    subTxt.textContent = "大きな声で曲名を答えてください！";
+  } else if (isOtherBuzz) {
+    btn.disabled = true;
+    const other = teams.find(t => t.id === mobileHostState.buzzedTeamId);
+    mainTxt.textContent = "他チーム解答中";
+    subTxt.textContent = `${other ? other.name : "別チーム"} が早押ししました`;
+  } else if (mobileHostState.gameState === "revealed") {
+    btn.disabled = true;
+    mainTxt.textContent = "正解発表中";
+    subTxt.textContent = "次の曲の準備をお待ちください";
+  } else if (!isMusicActive) {
+    btn.disabled = true;
+    mainTxt.textContent = "🔒 音楽再生待機中";
+    subTxt.textContent = "曲が流れたら早押し解除されます！";
+  } else {
+    btn.disabled = false;
+    mainTxt.textContent = "早押し！";
+    subTxt.textContent = "わかったら即タップ！！";
+  }
+}
+
+/* ============================================================================
+   10. UTILITIES, KEYBOARD SHORTCUTS & CONFETTI
+   ============================================================================ */
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, m => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]));
+}
+
+function showToast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  setTimeout(() => t.classList.remove("show"), 2600);
+}
+
+function launchConfetti() {
+  const canvas = document.getElementById("confettiCanvas");
+  const ctx = canvas.getContext("2d");
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  const colors = ["#f59e0b", "#ef4444", "#10b981", "#3b82f6", "#ec4899", "#fde047"];
+  const pieces = Array.from({ length: 110 }, () => ({
+    x: Math.random() * canvas.width,
+    y: -20 - Math.random() * 200,
+    w: 8 + Math.random() * 8,
+    h: 5 + Math.random() * 6,
+    vy: 3 + Math.random() * 5,
+    vx: -2 + Math.random() * 4,
+    rot: Math.random() * 360,
+    vrot: -6 + Math.random() * 12,
+    color: colors[Math.floor(Math.random() * colors.length)]
+  }));
+
+  let frames = 0;
+  function step() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    for (const p of pieces) {
+      p.x += p.vx;
+      p.y += p.vy;
+      p.rot += p.vrot;
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate((p.rot * Math.PI) / 180);
+      ctx.fillStyle = p.color;
+      ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+      ctx.restore();
+    }
+    frames++;
+    if (frames < 150) requestAnimationFrame(step);
+    else ctx.clearRect(0, 0, canvas.width, canvas.height);
+  }
+  requestAnimationFrame(step);
+}
+
+// Keyboard Shortcuts for MC (Space = Play/Resume, 1-8 = Team Buzzer)
+document.addEventListener("keydown", (e) => {
+  if (document.getElementById("hostApp").style.display === "none") return;
+  if (["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement.tagName)) return;
+
+  if (e.code === "Space") {
+    e.preventDefault();
+    if (state.gameState === "paused_wrong") {
+      resumeAfterWrong();
+    } else {
+      togglePlayPause();
+    }
+  } else if (e.key >= "1" && e.key <= "8") {
+    const idx = parseInt(e.key, 10) - 1;
+    if (state.teams[idx]) handleIncomingBuzz(state.teams[idx].id);
+  }
+});
+
+// Boot Initialization
+window.addEventListener("DOMContentLoaded", () => {
+  AudioEngine.setOnEnded(() => {
+    if (state.gameState === "playing") state.gameState = "idle";
+    renderAllHostUI();
+    broadcastHostState();
+  });
+
+  const params = new URLSearchParams(window.location.search);
+  const roomParam = params.get("room");
+  if (roomParam !== null) {
+    initMobileMode(roomParam);
+  } else {
+    const track = currentTrack();
+    AudioEngine.setPosition(track, Math.max(0, Number(track.introSec) || 0));
+    renderAllHostUI();
+    initHostPeer();
+  }
+});
+</script>
+</body>
+</html>
